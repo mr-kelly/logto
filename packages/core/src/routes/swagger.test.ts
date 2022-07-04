@@ -1,3 +1,4 @@
+import { load } from 'js-yaml';
 import Koa from 'koa';
 import Router from 'koa-router';
 import request from 'supertest';
@@ -8,6 +9,10 @@ import koaPagination from '@/middleware/koa-pagination';
 import { AnonymousRouter } from '@/routes/types';
 
 import swaggerRoutes, { paginationParameters } from './swagger';
+
+jest.mock('js-yaml', () => ({
+  load: jest.fn().mockReturnValue({}),
+}));
 
 const createSwaggerRequest = (
   allRouters: Array<Router<unknown, any>>,
@@ -221,6 +226,53 @@ describe('GET /swagger.json', () => {
                   },
                 },
               },
+            },
+          }),
+        },
+        /* eslint-enable @typescript-eslint/no-unsafe-assignment */
+      })
+    );
+  });
+
+  it('should append custom status code', async () => {
+    const mockRouter = new Router();
+    mockRouter.get('/mock', () => ({}));
+    mockRouter.patch('/mock', () => ({}));
+    mockRouter.post('/mock', () => ({}));
+    mockRouter.delete('/mock', () => ({}));
+    (load as jest.Mock).mockReturnValueOnce({
+      '/mock': {
+        get: 204,
+        patch: 202,
+        post: 201,
+        delete: 203,
+      },
+    });
+
+    const swaggerRequest = createSwaggerRequest([mockRouter]);
+    const response = await swaggerRequest.get('/swagger.json');
+    expect(response.body.paths).toMatchObject(
+      expect.objectContaining({
+        /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+        '/api/mock': {
+          get: expect.objectContaining({
+            responses: {
+              '204': expect.any(Object),
+            },
+          }),
+          patch: expect.objectContaining({
+            responses: {
+              '202': expect.any(Object),
+            },
+          }),
+          post: expect.objectContaining({
+            responses: {
+              '201': expect.any(Object),
+            },
+          }),
+          delete: expect.objectContaining({
+            responses: {
+              '203': expect.any(Object),
             },
           }),
         },

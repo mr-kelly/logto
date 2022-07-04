@@ -1,10 +1,13 @@
+import { readFileSync } from 'fs';
+
 import { toTitle } from '@silverhand/essentials';
+import { load } from 'js-yaml';
 import Router, { IMiddleware } from 'koa-router';
 import { OpenAPIV3 } from 'openapi-types';
 import { ZodObject, ZodOptional } from 'zod';
 
 import { isGuardMiddleware, WithGuardConfig } from '@/middleware/koa-guard';
-import { isPaginationMiddleware, fallbackDefaultPageSize } from '@/middleware/koa-pagination';
+import { fallbackDefaultPageSize, isPaginationMiddleware } from '@/middleware/koa-pagination';
 import assertThat from '@/utils/assert-that';
 import { zodTypeToSwagger } from '@/utils/zod';
 
@@ -19,6 +22,10 @@ type RouteObject = {
 type MethodMap = {
   [key in OpenAPIV3.HttpMethods]?: OpenAPIV3.OperationObject;
 };
+
+type MethodStatusCodes = Record<string, number>;
+
+type RouteStatusCodes = Record<string, MethodStatusCodes>;
 
 export const paginationParameters: OpenAPIV3.ParameterObject[] = [
   {
@@ -62,7 +69,11 @@ const buildParameters = (
   }));
 };
 
-const buildOperation = (stack: IMiddleware[], path: string): OpenAPIV3.OperationObject => {
+const buildOperation = (
+  stack: IMiddleware[],
+  path: string,
+  status: number
+): OpenAPIV3.OperationObject => {
   const guard = stack.find((function_): function_ is WithGuardConfig<IMiddleware> =>
     isGuardMiddleware(function_)
   );
@@ -89,7 +100,7 @@ const buildOperation = (stack: IMiddleware[], path: string): OpenAPIV3.Operation
     parameters: [...pathParameters, ...queryParameters],
     requestBody,
     responses: {
-      '200': {
+      [String(status)]: {
         description: 'OK',
       },
     },
@@ -101,16 +112,25 @@ export default function swaggerRoutes<T extends AnonymousRouter, R extends Route
   allRouters: R[]
 ) {
   router.get('/swagger.json', async (ctx, next) => {
+    const routeStatusCodes = load(
+      readFileSync('static/yaml/route-status-codes.yaml', 'utf-8')
+    ) as RouteStatusCodes;
+
     const routes = allRouters.flatMap<RouteObject>((router) =>
       router.stack.flatMap<RouteObject>(({ path, stack, methods }) =>
         methods
           // There is no need to show the HEAD method.
           .filter((method) => method !== 'HEAD')
-          .map((method) => ({
-            path: `/api${path}`,
-            method: method.toLowerCase() as OpenAPIV3.HttpMethods,
-            operation: buildOperation(stack, path),
-          }))
+          .map((method) => {
+            const methodStatusCode = routeStatusCodes[path] ?? {};
+            const status = methodStatusCode[method.toLowerCase()] ?? 200;
+
+            return {
+              path: `/api${path}`,
+              method: method.toLowerCase() as OpenAPIV3.HttpMethods,
+              operation: buildOperation(stack, path, status),
+            };
+          })
       )
     );
 

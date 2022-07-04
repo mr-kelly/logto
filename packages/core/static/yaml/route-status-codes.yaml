@@ -1,0 +1,22 @@
+/applications/:id:
+  delete: 204
+/connectors/:id/test:
+  delete: 204
+/me/password:
+  patch: 204
+/resources/:id:
+  delete: 204
+/session/sign-in/passwordless/sms/send-passcode:
+  post: 204
+/session/sign-in/passwordless/email/send-passcode:
+  post: 204
+/session/register/passwordless/sms/send-passcode:
+  post: 204
+/session/register/passwordless/email/send-passcode:
+  post: 204
+/status:
+  get: 204
+/users/:userId:
+  delete: 204
+/.well-known/sign-in-exp:
+  get: 304
